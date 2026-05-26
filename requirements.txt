@@ -1,0 +1,3 @@
+# Pyron - Autonomous AI Agent
+# No external dependencies required (uses Python standard library)
+# For GUI support, tkinter is needed (included with most Python distributions)

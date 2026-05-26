@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[project]
+name = "pyron"
+version = "1.0.0"
+description = "Pyron - Autonomous AI Agent powered by OpenCode API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "Llucs", email = "llucs@pyron.dev" },
+]
+
+[project.urls]
+Homepage = "https://github.com/Llucs/pyron"
+
+[project.scripts]
+pyron = "pyron.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["pyron*"]
