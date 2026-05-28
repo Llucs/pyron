@@ -31,8 +31,7 @@ class Plan:
     def summary(self) -> str:
         lines = [f"Goal: {self.goal}", ""]
         for s in self.steps:
-            marker = ">" if s.id == self.current_step else " "
-            lines.append(f"  {marker} [{s.status:9}] Step {s.id}: {s.description}")
+            lines.append(f"  [{s.status:9}] Step {s.id}: {s.description}")
         return "\n".join(lines)
 
 
@@ -40,29 +39,30 @@ def extract_plan(text: str, goal: str) -> Optional[Plan]:
     lines = text.strip().split("\n")
     steps = []
     step_id = 0
-
     for line in lines:
         m = re.match(r"^\d+[.)]\s+(.+)", line.strip())
         if m:
             step_id += 1
             steps.append(Step(id=step_id, description=m.group(1).strip()))
-
     if steps:
         return Plan(goal=goal, steps=steps, current_step=1)
     return None
 
 
-SYSTEM_PLAN_PROMPT = """You are a planning agent. Given a user goal, create a step-by-step plan.
-Output each step on a new line, numbered like:
+SYSTEM_PLAN_PROMPT = """You are Pyron, an autonomous AI planning agent with hierarchical memory.
+Given a user goal, create a detailed step-by-step plan.
+
+Each step should be specific and actionable. Number each step:
 1. First step description
 2. Second step description
 ...
 
-Only output the numbered steps, nothing else."""
+Output only the numbered steps, nothing else."""
 
+SYSTEM_EXECUTE_PROMPT = """{memory_context}
 
-SYSTEM_EXECUTE_PROMPT = """You are Pyron, an autonomous AI agent.
-You have access to tools that let you execute bash commands, read/write files, and explore directories.
+You are Pyron, an autonomous AI agent with expanded memory (~1M tokens effective).
+You have access to tools that let you execute bash commands, read/write files, explore directories, search code, fetch web pages, and run Python code.
 
 Available tools:
 {tools}
@@ -81,4 +81,5 @@ When the task is complete, respond with:
   "result": "final result message"
 }}
 
-Always think step by step. Use tools to gather information before taking actions."""
+Always think step by step. Use tools to gather information before taking actions.
+Maintain coherence through the knowledge graph. Be extremely token-efficient."""
