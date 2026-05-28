@@ -1,7 +1,5 @@
 import sys
 import shutil
-import json
-import time
 
 from pyron.agent.agent import Agent
 from pyron.api.client import ApiClient, Message
@@ -25,12 +23,13 @@ def print_help():
     print("  /config        - Show current configuration")
     print("  /model <m>     - Change model")
     print("  /clear         - Clear screen")
-    print("  /chat          - Toggle free chat mode (agent with full tools)")
+    print("  /chat          - Toggle pure chat mode (no tools)")
+    print("  /plan <goal>   - Force plan-execute mode for a goal")
     print("  /memory        - Show memory layer statistics")
     print("  /forget        - Apply forgetting curve to prune old memories")
-    print("  /plan <goal>   - Create and execute a plan for a goal")
     print()
-    print("Usage: Just type anything. Pyron uses its memory to help you freely.")
+    print("Usage: Type any task or question. Pyron plans and executes with tools.")
+    print("       Like a free terminal — just describe what you want done.")
     print()
 
 
@@ -59,7 +58,7 @@ def interactive_loop():
 
     agent = Agent()
     chat_history = [Message("system", SYSTEM_MASTER_PROMPT)]
-    free_mode = True
+    chat_only = False
 
     while True:
         try:
@@ -97,8 +96,11 @@ def interactive_loop():
             continue
 
         if user_input == "/chat":
-            free_mode = not free_mode
-            print(f"{'Free chat mode with tools' if free_mode else 'Plan-execute mode'} {'ON' if free_mode else 'OFF'}")
+            chat_only = not chat_only
+            if chat_only:
+                print("Chat mode ON — responses only, no tool execution")
+            else:
+                print("Free terminal mode ON — tasks are planned and executed with tools")
             continue
 
         if user_input == "/memory":
@@ -116,26 +118,31 @@ def interactive_loop():
                 print("Specify a goal: /plan <goal>")
                 continue
             print(f"\n{'─' * shutil.get_terminal_size().columns}")
-            print("  Planning and executing...")
+            print("  Pyron is planning and executing...")
             print(f"{'─' * shutil.get_terminal_size().columns}\n")
             result = agent.run(goal)
             print(f"\n{result}\n")
             continue
 
-        agent.memory.save_interaction("user", user_input, importance=0.7, tags=["interactive"])
-        chat_history.append(Message("user", user_input))
-
-        try:
-            response = agent.client.complete(chat_history)
-            output = response.content
-            print(f"\n{output}\n")
-            agent.memory.save_interaction("assistant", output, importance=0.6, tags=["response"])
-            chat_history.append(Message("assistant", output))
-        except Exception as e:
-            print(f"\n[Error] {e}\n")
+        if chat_only:
+            chat_history.append(Message("user", user_input))
+            try:
+                response = agent.client.complete(chat_history)
+                print(f"\n{response.content}\n")
+                chat_history.append(Message("assistant", response.content))
+            except Exception as e:
+                print(f"\n[Error] {e}\n")
+        else:
+            print(f"\n{'─' * shutil.get_terminal_size().columns}")
+            print("  Pyron is planning and executing...")
+            print(f"{'─' * shutil.get_terminal_size().columns}\n")
+            try:
+                result = agent.run(user_input)
+                print(f"\n{result}\n")
+            except Exception as e:
+                print(f"\n[Error] {e}\n")
 
         agent.memory.check_and_compress()
-        agent.memory.apply_forgetting(threshold=0.05)
 
 
 def main():
