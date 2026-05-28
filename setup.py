@@ -2,8 +2,8 @@ from setuptools import setup, find_packages
 
 setup(
     name="pyron",
-    version="1.0.0",
-    description="Pyron - Autonomous AI Agent powered by OpenCode API",
+    version="2.0.0",
+    description="Pyron - Autonomous AI Agent with Hierarchical Memory (~1M tokens effective context)",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
     author="Llucs",
@@ -18,12 +18,13 @@ setup(
         ],
     },
     classifiers=[
-        "Development Status :: 3 - Alpha",
+        "Development Status :: 4 - Beta",
         "Intended Audience :: Developers",
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
         "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
+        "Topic :: Scientific/Engineering :: Artificial Intelligence",
     ],
 )
