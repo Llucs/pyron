@@ -1,11 +1,13 @@
 import os
 import json
+import time
 from pathlib import Path
 
 CONFIG_DIR = Path.home() / ".config" / "pyron"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 HISTORY_DIR = CONFIG_DIR / "history"
 MEMORY_DIR = CONFIG_DIR / "memory"
+BUG_DB_FILE = CONFIG_DIR / "bugs.json"
 
 DEFAULT_CONFIG = {
     "base_url": "https://opencode.ai/zen/v1/chat/completions",
@@ -24,8 +26,7 @@ def load_config() -> dict:
     cfg = DEFAULT_CONFIG.copy()
     if CONFIG_FILE.exists():
         try:
-            user_cfg = json.loads(CONFIG_FILE.read_text())
-            cfg.update(user_cfg)
+            cfg.update(json.loads(CONFIG_FILE.read_text()))
         except (json.JSONDecodeError, IOError):
             pass
     return cfg
@@ -68,3 +69,26 @@ def get_memory_config() -> dict:
         "reflection_interval_max": cfg.get("reflection_interval_max", 12),
         "forgetting_threshold": cfg.get("forgetting_threshold", 0.05),
     }
+
+
+def load_bug_db() -> list[dict]:
+    if BUG_DB_FILE.exists():
+        return json.loads(BUG_DB_FILE.read_text())
+    return []
+
+
+def save_bug_db(bugs: list[dict]):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    BUG_DB_FILE.write_text(json.dumps(bugs, indent=2, ensure_ascii=False))
+
+
+def add_bug(description: str, cause: str, solution: str, file_path: str = ""):
+    bugs = load_bug_db()
+    bugs.append({
+        "description": description,
+        "cause": cause,
+        "solution": solution,
+        "file": file_path,
+        "timestamp": time.time(),
+    })
+    save_bug_db(bugs)
