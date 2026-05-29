@@ -42,6 +42,7 @@ def print_help():
     print(f"  {_bold('/commands')}")
     print(f"    {_bold('/exit')}          exit")
     print(f"    {_bold('/help')}          this help")
+    print(f"    {_bold('/version')}       show version")
     print(f"    {_bold('/config')}        show config")
     print(f"    {_bold('/model')} <name>  change model")
     print(f"    {_bold('/clear')}         clear screen")
@@ -104,6 +105,11 @@ def interactive_loop():
 
         if inp == "/help":
             print_help()
+            continue
+
+        if inp == "/version":
+            from pyron.__init__ import __version__
+            print(f"  pyron {__version__}")
             continue
 
         if inp == "/config":
