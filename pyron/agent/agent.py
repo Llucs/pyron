@@ -1,10 +1,11 @@
 import json
 import os
+import time
 from typing import Optional, Callable
 
 from pyron.api.client import ApiClient, Message
-from pyron.agent.tools import AVAILABLE_TOOLS, execute_tool, _INITIAL_CWD
-from pyron.agent.planning import Plan, Step, extract_plan, SYSTEM_PLAN_PROMPT, SYSTEM_EXECUTE_PROMPT
+from pyron.agent.tools import AVAILABLE_TOOLS, execute_tool, is_fast_path, _INITIAL_CWD
+from pyron.agent.planning import Plan, Step, extract_plan, SYSTEM_PLAN_PROMPT, SYSTEM_EXECUTE_PROMPT, assess_complexity, get_plan_depth_instruction
 from pyron.memory_manager import MemoryManager, SYSTEM_MASTER_PROMPT
 from pyron.config import get_api_config
 
@@ -38,19 +39,11 @@ class Agent:
         home = os.path.expanduser("~")
         if cwd.startswith(home):
             cwd = "~" + cwd[len(home):]
-        pt = self.prompt_tokens
-        ct = self.completion_tokens
+        pt, ct = self.prompt_tokens, self.completion_tokens
         pt_s = f"{pt/1000:.1f}K" if pt >= 1000 else str(pt)
         ct_s = f"{ct/1000:.1f}K" if ct >= 1000 else str(ct)
         model_s = self._model.split("/")[-1][:20]
-        return (
-            f"\r\033[K"
-            f"\033[36mpyron@{cwd}\033[0m "
-            f"\033[2m[\033[0m{model_s}\033[2m]\033[0m "
-            f"step {self._current_step}/{self._total_steps} "
-            f"({pct}%)"
-            f"\033[2m  \u2191{pt_s} \u2193{ct_s}\033[0m"
-        )
+        return f"\r\033[K\033[36mpyron@{cwd}\033[0m \033[2m[\033[0m{model_s}\033[2m]\033[0m step {self._current_step}/{self._total_steps} ({pct}%)\033[2m  \u2191{pt_s} \u2193{ct_s}\033[0m"
 
     def _update_status(self):
         self._status_fn(self._status_line())
@@ -63,60 +56,46 @@ class Agent:
         self.memory.save_interaction("user", goal, importance=0.9, tags=["goal"])
         self.memory.add_entity("Pyron", "agent", {"type": "autonomous AI"})
 
-        self._emit(f"\033[1mGoal:\033[0m {goal}")
-        plan = self._create_plan(goal)
+        complexity = assess_complexity(goal)
+        self._emit(f"\033[1mGoal:\033[0m {goal} \033[2m[{complexity}]\033[0m")
+
+        plan = self._create_plan(goal, complexity)
         if not plan:
             return "Failed to create plan."
 
         self.plan = plan
         self._total_steps = len(plan.steps)
-        self._emit(f"\033[1mPlan:\033[0m {len(plan.steps)} steps")
+        self._emit(f"\033[1mPlan:\033[0m {len(plan.steps)} steps ({complexity})")
         for s in plan.steps:
             self._emit(f"  \033[2m{s.id}.\033[0m {s.description}")
         self._update_status()
 
         tools_desc = self._format_tools()
         memory_context = self.memory.retrieve_context(goal)
-        system_prompt = SYSTEM_EXECUTE_PROMPT.format(
-            memory_context=memory_context,
-            tools=tools_desc,
-        )
+        system_prompt = SYSTEM_EXECUTE_PROMPT.format(memory_context=memory_context, tools=tools_desc)
         context = f"Goal: {goal}\n\nPlan:\n{plan.summary()}\n\nBegin executing step 1."
 
-        self.history = [
-            Message("system", system_prompt),
-            Message("user", context),
-        ]
-        self.memory.save_interaction("system", SYSTEM_MASTER_PROMPT,
-                                     importance=0.8, tags=["system"])
-        self.memory.save_interaction("assistant", f"Plan created with {len(plan.steps)} steps",
-                                     importance=0.6, tags=["plan"])
+        self.history = [Message("system", system_prompt), Message("user", context)]
+        self.memory.save_interaction("system", SYSTEM_MASTER_PROMPT, importance=0.8, tags=["system"])
+        self.memory.save_interaction("assistant", f"Plan created with {len(plan.steps)} steps", importance=0.6, tags=["plan"])
 
         for step in plan.steps:
             step.status = "in_progress"
             self._current_step = step.id
             self._emit(f"\n\033[34m--- Step {step.id}: {step.description} ---\033[0m")
-
-            context_msg = (
-                f"Execute step {step.id}: {step.description}\n"
-                f"Previous results: {step.result or 'none'}"
-            )
+            context_msg = f"Execute step {step.id}: {step.description}\nPrevious results: {step.result or 'none'}"
             self.memory.save_interaction("user", context_msg, importance=0.7, tags=["step"])
             result = self._execute_step(step)
             step.status = "done"
             step.result = result
-
             self._emit(f"\033[32m--- Step {step.id}: done ---\033[0m")
             self._update_status()
-
-            self.memory.save_interaction("assistant", f"Step {step.id} completed: {result[:200]}",
-                                         importance=0.6, tags=["step_result"])
+            self.memory.save_interaction("assistant", f"Step {step.id} completed: {result[:200]}", importance=0.6, tags=["step_result"])
             self.memory.check_and_compress()
             reflection = self.memory.reflection.reflect(self.memory.knowledge_graph)
             if reflection:
                 self._emit(f"\033[33m[Reflection] {reflection}\033[0m")
-                self.memory.save_interaction("system", f"[Reflection] {reflection}",
-                                             importance=0.5, tags=["reflection"])
+                self.memory.save_interaction("system", f"[Reflection] {reflection}", importance=0.5, tags=["reflection"])
 
         self.memory.apply_forgetting(threshold=0.05)
         return self._summarize()
@@ -129,11 +108,9 @@ class Agent:
                 lines.append(f"    {pname}: {pdesc}")
         return "\n".join(lines)
 
-    def _create_plan(self, goal: str) -> Optional[Plan]:
-        messages = [
-            Message("system", SYSTEM_PLAN_PROMPT),
-            Message("user", f"Create a plan for: {goal}"),
-        ]
+    def _create_plan(self, goal: str, complexity: str) -> Optional[Plan]:
+        depth_instruction = get_plan_depth_instruction(complexity)
+        messages = [Message("system", SYSTEM_PLAN_PROMPT), Message("user", f"{depth_instruction}\n\nGoal: {goal}")]
         response = self.client.complete(messages)
         if response.usage:
             self.prompt_tokens += response.usage.prompt_tokens
@@ -142,13 +119,13 @@ class Agent:
 
     def _execute_step(self, step: Step) -> str:
         max_attempts = 5
+        last_error = ""
+
         for attempt in range(max_attempts):
             if attempt > 0:
-                self._emit(f"\033[33m  Retry {attempt}/{max_attempts}\033[0m")
+                self._emit(f"\033[33m  Retry {attempt}/{max_attempts}: {last_error[:100]}\033[0m")
 
-            memory_context = self.memory.retrieve_context(
-                f"Step {step.id}: {step.description}", max_tokens=3000
-            )
+            memory_context = self.memory.retrieve_context(f"Step {step.id}: {step.description}", max_tokens=3000)
             step_prompt = (
                 f"Execute step {step.id}: {step.description}\n"
                 f"Previous results: {step.result or 'none'}\n"
@@ -161,21 +138,18 @@ class Agent:
                 self.completion_tokens += response.usage.completion_tokens
             content = response.content.strip()
 
-            self.memory.save_interaction(
-                "assistant", content, importance=0.5,
-                tags=["step_attempt", f"attempt_{attempt + 1}"]
-            )
+            self.memory.save_interaction("assistant", content, importance=0.5, tags=["step_attempt", f"attempt_{attempt + 1}"])
 
             action = self._parse_action(content)
             if action is None:
                 self.history.append(Message("assistant", content))
+                last_error = "No valid action found"
                 continue
 
             if action.get("complete"):
                 self.history.append(Message("assistant", content))
                 result = action.get("result", "Task completed")
-                self.memory.add_relation("Pyron", "completed", step.description,
-                                         {"result": result[:100]})
+                self.memory.add_relation("Pyron", "completed", step.description, {"result": result[:100]})
                 return result
 
             tool_name = action.get("tool", "")
@@ -185,30 +159,44 @@ class Agent:
                 self._emit(f"\033[31m  Unknown tool: {tool_name}\033[0m")
                 self.history.append(Message("assistant", content))
                 self.history.append(Message("user", f"Unknown tool: {tool_name}"))
+                last_error = f"Unknown tool: {tool_name}"
                 continue
 
-            self._emit(f"  \033[93m{tool_name}\033[0m")
+            fast = is_fast_path(tool_name, params)
+            if fast:
+                self._emit(f"  \033[93m\u26a1{tool_name}\033[0m (fast-path)")
+            else:
+                self._emit(f"  \033[93m{tool_name}\033[0m")
 
             result = execute_tool(tool_name, params)
+            tool_success = result.success and not result.is_real_failure
 
-            if not result.success:
+            if not tool_success:
                 self._emit(f"  \033[31m{result.error[:200]}\033[0m")
             else:
                 out = result.output[:300]
-                self._emit(f"  \033[90m{out}\033[0m")
+                if out.strip():
+                    self._emit(f"  \033[90m{out}\033[0m")
 
             self._update_status()
-
             result_text = json.dumps(result.to_dict(), indent=2)
-            self.memory.save_interaction(
-                "tool", f"{tool_name}: {result_text[:500]}",
-                importance=0.5, tags=["tool_use", tool_name]
-            )
+            self.memory.save_interaction("tool", f"{tool_name}: {result_text[:500]}", importance=0.5, tags=["tool_use", tool_name])
+
+            if tool_success:
+                self.history.append(Message("assistant", content))
+                self.history.append(Message("user", f"Result:\n{result_text}"))
+                return result.output[:1000]
+
+            last_error = result.error or result.output[:200]
             self.history.append(Message("assistant", content))
-            self.history.append(Message("user", f"Result:\n{result_text}"))
+            self.history.append(Message("user", f"Result (failure):\n{result_text}"))
+
+            if attempt >= 2:
+                self.history.append(Message("system", f"[Reflection]\nRoot cause: {last_error[:200]}\nRetry strategy: Verify prerequisites and try alternative approach."))
+
             self.memory.check_and_compress()
 
-        return "Max attempts reached"
+        return f"Max attempts ({max_attempts}) reached. Last error: {last_error[:500]}"
 
     def _parse_action(self, content: str) -> Optional[dict]:
         decoder = json.JSONDecoder()
@@ -234,17 +222,6 @@ class Agent:
                 completed += 1
             steps_summary.append(f"  {step.id}. {step.description} [{status}]")
         stats = self.memory.get_stats()
-        mem = (
-            f"memory: {stats['vector_items']} vectors, "
-            f"{stats['kg_entities']} entities, "
-            f"{stats['kg_relations']} relations"
-        )
-        tokens = (
-            f"tokens: \u2191{self.prompt_tokens} prompt, "
-            f"\u2193{self.completion_tokens} completion"
-        )
-        return (
-            f"Goal: {self.plan.goal}  |  "
-            f"{completed}/{len(self.plan.steps)} steps  |  "
-            f"{mem}  |  {tokens}"
-        )
+        mem = f"memory: {stats['vector_items']} vectors, {stats['kg_entities']} entities, {stats['kg_relations']} relations"
+        tokens = f"tokens: \u2191{self.prompt_tokens} prompt, \u2193{self.completion_tokens} completion"
+        return f"Goal: {self.plan.goal}  |  {completed}/{len(self.plan.steps)} steps  |  {mem}  |  {tokens}"
