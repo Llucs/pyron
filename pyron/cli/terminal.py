@@ -1,5 +1,4 @@
 import sys
-import shutil
 
 from pyron.agent.agent import Agent
 from pyron.api.client import ApiClient, Message
@@ -7,30 +6,19 @@ from pyron.config import get_api_config, set_api_config
 from pyron.memory_manager import MemoryManager, SYSTEM_MASTER_PROMPT
 
 
-def print_header():
-    term_width = shutil.get_terminal_size().columns
-    print("=" * term_width)
-    print("  Pyron - Autonomous AI Agent with Hierarchical Memory".center(term_width))
-    print(f"  Model: {get_api_config()['model']}  |  Effective Context: ~1M tokens".center(term_width))
-    print("=" * term_width)
-    print()
-
-
 def print_help():
     print("Commands:")
-    print("  /exit          - Exit Pyron")
-    print("  /help          - Show this help message")
-    print("  /config        - Show current configuration")
+    print("  /exit          - Exit")
+    print("  /help          - Show this help")
+    print("  /config        - Show configuration")
     print("  /model <m>     - Change model")
     print("  /clear         - Clear screen")
-    print("  /chat          - Toggle pure chat mode (no tools)")
-    print("  /plan <goal>   - Force plan-execute mode for a goal")
-    print("  /memory        - Show memory layer statistics")
-    print("  /forget        - Apply forgetting curve to prune old memories")
+    print("  /chat          - Toggle pure chat mode")
+    print("  /plan <goal>   - Plan-execute mode for a goal")
+    print("  /memory        - Show memory statistics")
+    print("  /forget        - Apply forgetting curve")
     print()
-    print("Usage: Type any task or question. Pyron plans and executes with tools.")
-    print("       Like a free terminal — just describe what you want done.")
-    print()
+    print("Type any task or question. Pyron plans and executes with tools.")
 
 
 def _show_memory_stats(memory: MemoryManager):
@@ -53,10 +41,9 @@ def _show_memory_stats(memory: MemoryManager):
 
 
 def interactive_loop():
-    print_header()
     print_help()
 
-    agent = Agent()
+    agent = Agent(log_fn=lambda x: print(x, flush=True))
     chat_history = [Message("system", SYSTEM_MASTER_PROMPT)]
     chat_only = False
 
@@ -92,7 +79,7 @@ def interactive_loop():
 
         if user_input == "/clear":
             print("\033[2J\033[H", end="")
-            print_header()
+            print_help()
             continue
 
         if user_input == "/chat":
@@ -117,9 +104,6 @@ def interactive_loop():
             if not goal:
                 print("Specify a goal: /plan <goal>")
                 continue
-            print(f"\n{'─' * shutil.get_terminal_size().columns}")
-            print("  Pyron is planning and executing...")
-            print(f"{'─' * shutil.get_terminal_size().columns}\n")
             result = agent.run(goal)
             print(f"\n{result}\n")
             continue
@@ -133,9 +117,6 @@ def interactive_loop():
             except Exception as e:
                 print(f"\n[Error] {e}\n")
         else:
-            print(f"\n{'─' * shutil.get_terminal_size().columns}")
-            print("  Pyron is planning and executing...")
-            print(f"{'─' * shutil.get_terminal_size().columns}\n")
             try:
                 result = agent.run(user_input)
                 print(f"\n{result}\n")
@@ -161,7 +142,7 @@ def main():
 
     if args:
         goal = " ".join(args)
-        agent = Agent()
+        agent = Agent(log_fn=lambda x: print(x, flush=True))
         result = agent.run(goal)
         print(result)
         return

@@ -67,19 +67,10 @@ You have access to tools that let you execute bash commands, read/write files, e
 Available tools:
 {tools}
 
-For each step, respond with a JSON object:
-{{
-  "thought": "your reasoning about what to do next",
-  "tool": "tool_name",
-  "parameters": {{ "param1": "value1", ... }}
-}}
+Respond with ONLY a JSON object:
+{{"tool": "tool_name", "parameters": {{"param1": "value1"}}}}
 
-When the task is complete, respond with:
-{{
-  "thought": "summary of what was accomplished",
-  "complete": true,
-  "result": "final result message"
-}}
+When the step is complete, respond with:
+{{"complete": true, "result": "what was accomplished"}}
 
-Always think step by step. Use tools to gather information before taking actions.
-Maintain coherence through the knowledge graph. Be extremely token-efficient."""
+Use tools one at a time. Check results before proceeding."""

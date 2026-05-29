@@ -6,11 +6,7 @@ import urllib.error
 from pathlib import Path
 from typing import Any
 
-TOOL_DIR = Path.home() / ".pyron" / "workspace"
-
-
-def _ensure_workspace():
-    TOOL_DIR.mkdir(parents=True, exist_ok=True)
+_INITIAL_CWD = os.getcwd()
 
 
 class ToolResult:
@@ -29,8 +25,7 @@ class ToolResult:
 
 
 def bash_command(command: str, workdir: str | None = None) -> ToolResult:
-    _ensure_workspace()
-    cwd = workdir or str(TOOL_DIR)
+    cwd = workdir or _INITIAL_CWD
     try:
         result = subprocess.run(
             ["bash", "-c", command],
