@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="pyron",
-    version="2.0.0",
+    version="2.1.0",
     description="Pyron - Autonomous AI Agent with Hierarchical Memory (~1M tokens effective context)",
     long_description=open("README.md").read(),
     long_description_content_type="text/markdown",
