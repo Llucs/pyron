@@ -6,6 +6,30 @@ from pathlib import Path
 CONFIG_DIR = Path.home() / ".config" / "pyron"
 CONFIG_FILE = CONFIG_DIR / "config.json"
 HISTORY_DIR = CONFIG_DIR / "history"
+BUG_DB_FILE = CONFIG_DIR / "bugs.json"
+
+
+def load_bug_db() -> list[dict]:
+    if BUG_DB_FILE.exists():
+        return json.loads(BUG_DB_FILE.read_text())
+    return []
+
+
+def save_bug_db(bugs: list[dict]):
+    CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+    BUG_DB_FILE.write_text(json.dumps(bugs, indent=2, ensure_ascii=False))
+
+
+def add_bug(description: str, cause: str, solution: str, file_path: str = ""):
+    bugs = load_bug_db()
+    bugs.append({
+        "description": description,
+        "cause": cause,
+        "solution": solution,
+        "file": file_path,
+        "timestamp": __import__("time").time(),
+    })
+    save_bug_db(bugs)
 
 
 def load_config() -> dict:
