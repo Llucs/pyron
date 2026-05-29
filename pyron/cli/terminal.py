@@ -58,7 +58,7 @@ LOGO = f"""
    ██╔═══╝   ╚██╔╝  ██╔══██╗██║   ██║██║╚██╗██║
    ██║        ██║   ██║  ██║╚██████╔╝██║ ╚████║
    ╚═╝        ╚═╝   ╚═╝  ╚═╝ ╚═════╝ ╚═╝  ╚═══╝
-{Style.RESET}{A}      Autonomous AI Agent \u2014 v2.1.0{Style.RESET}
+{Style.RESET}{A}      Autonomous AI Agent \u2014 v2.2.0{Style.RESET}
 """
 
 
@@ -77,7 +77,7 @@ def print_header():
     sys.stdout.flush()
     cfg = get_api_config()
     print_line()
-    sys.stdout.write(f"  {c('Model:', M)} {c(cfg['model'], S)}  {c('API:', M)} {c(cfg['base_url'][:50], M, dim=True)}  {c('v2.1.0', A)}\n")
+    sys.stdout.write(f"  {c('Model:', M)} {c(cfg['model'], S)}  {c('API:', M)} {c(cfg['base_url'][:50], M, dim=True)}  {c('v2.2.0', A)}\n")
     print_line()
     sys.stdout.write("\n")
     sys.stdout.flush()
